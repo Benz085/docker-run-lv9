@@ -1,0 +1,129 @@
+version: '3'
+services:
+    #elasticsearch
+    elasticsearch:
+        container_name: elastic-container-es01
+        image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+        ports:
+            - ${ES_PORT}:9200
+        environment:
+            - xpack.security.enabled=true
+            - "discovery.type=single-node"
+            - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+            - "network.host:0.0.0.0"
+            - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+            # - node.name=es01
+            # - cluster.name=${CLUSTER_NAME}
+            # - cluster.initial_master_nodes=es01
+            # # - discovery.seed_hosts=es02,es03
+            # - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+            # - bootstrap.memory_lock=true
+            # - xpack.security.enabled=true
+            # - xpack.security.http.ssl.enabled=true
+            # - xpack.security.http.ssl.key=certs/es01/es01.key
+            # - xpack.security.http.ssl.certificate=certs/es01/es01.crt
+            # - xpack.security.http.ssl.certificate_authorities=certs/ca/ca.crt
+            # - xpack.security.transport.ssl.enabled=true
+            # - xpack.security.transport.ssl.key=certs/es01/es01.key
+            # - xpack.security.transport.ssl.certificate=certs/es01/es01.crt
+            # - xpack.security.transport.ssl.certificate_authorities=certs/ca/ca.crt
+            # - xpack.security.transport.ssl.verification_mode=certificate
+            # - xpack.license.self_generated.type=${LICENSE}
+        mem_limit: ${MEM_LIMIT}
+        ulimits:
+            memlock:
+                soft: -1
+                hard: -1
+        # healthcheck:
+        #     test:
+        #         [
+        #             "CMD-SHELL",
+        #             "curl -s --cacert config/certs/ca/ca.crt https://localhost:9200 | grep -q 'missing authentication credentials'"
+        #         ]
+        #     interval: 10s
+        #     timeout: 10s
+        #     retries: 120
+        volumes:
+            - dbdata:/usr/share/elasticsearch/data
+        networks:
+            - app-network
+
+    #PHP Service
+    app:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        image: php
+        container_name: app
+        restart: unless-stopped
+        tty: true
+        ports:
+            - "9000"
+        environment:
+            SERVICE_NAME: app
+            SERVICE_TAGS: dev
+        working_dir: /var/www
+        volumes:
+            - ./:/var/www
+            - ./php/local.ini:/usr/local/etc/php/conf.d/local.ini
+        networks:
+            - app-network
+
+    #Nginx Service
+    webserver:
+        image: nginx:alpine
+        container_name: webserver
+        restart: unless-stopped
+        tty: true
+        ports:
+            - "80:80"
+            - "443:443"
+        volumes:
+            - ./:/var/www
+            - ./nginx/conf.d/:/etc/nginx/conf.d/
+        networks:
+            - app-network
+
+    #MySQL Service
+    db:
+        platform: linux/amd64
+        image: mysql:latest
+        container_name: db
+        restart: unless-stopped
+        tty: true
+        ports:
+            - "4406:3306"
+        environment:
+            MYSQL_DATABASE: db_main
+            MYSQL_ROOT_PASSWORD: xG3ZdtH@fpPhxX!r
+            SERVICE_TAGS: dev
+            SERVICE_NAME: mysql
+        volumes:
+            - dbdata:/var/lib/mysql/
+            - ./mysql/my.cnf:/etc/mysql/my.cnf
+        networks:
+            - app-network
+
+    # mongo:
+    #     image: mongo:latest
+    #     container_name: mongo
+    #     restart: always
+    #     environment:
+    #         MONGO_INITDB_ROOT_USERNAME: root
+    #         MONGO_INITDB_ROOT_PASSWORD: yiiUtyyGbQq8oIWuGfHKOSh6j5ZmNgB5
+    #     ports:
+    #         - 27017:27017
+    #     volumes:
+    #         - mongo:/data/db
+    #         - mongo_config:/data/configdb
+    #     networks:
+    #         - app-network
+
+#Docker Networks
+networks:
+    app-network:
+        driver: bridge
+#Volumes
+volumes:
+    dbdata:
+        driver: local
